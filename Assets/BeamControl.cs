@@ -3,96 +3,106 @@ using System.Collections;
 
 public class BeamControl : MonoBehaviour
 {
-    public Transform parrentTransform;
-    public Transform endPoint;
+    public Transform startPoint;
     public Vector3 direction;
     public LineRenderer laserLine;
     public LayerMask mask;
+    public float laserWidth = 0.2f;
+    public Vector3 offsetVector = new Vector3(0f, 0f, 0f);
 
+    private GameObject reflexGameObj = null;
     private RaycastHit hitInfo;
 
     void Start()
     {
-        laserLine.SetWidth(0.2f, 0.2f);
+        startPoint = transform;
+        laserLine.SetWidth(laserWidth, laserWidth);
         direction = Vector3.right;
     }
 
     void Update()
     {
         traceLine();
-        //detectReflexion();
-        //detectObstacle();
     }
 
     private void traceLine()
     {
-        Debug.DrawRay(parrentTransform.position, direction, Color.red);
+        Debug.DrawRay(startPoint.position, direction, Color.red);
 
         //if (Physics.Raycast(parrentTransform.position, comingVector, out hit, mask))
-        if (Physics.Raycast(parrentTransform.position, direction, out hitInfo))
+        if (Physics.Raycast(startPoint.position, direction, out hitInfo))
         {
             laserLine.SetVertexCount(2);
-            laserLine.SetPosition(0, parrentTransform.position);
+            laserLine.SetPosition(0, startPoint.position + offsetVector);
             laserLine.SetPosition(1, hitInfo.point);
 
+            // When hits the mirror
             if (true)
             {
-                Vector3 incomingVector = hitInfo.point - parrentTransform.position;
-                Vector3 reflectVector = Vector3.Reflect(incomingVector, hitInfo.normal);
-                Debug.DrawRay(hitInfo.point, reflectVector, Color.green);
-                laserLine.SetVertexCount(3);
-                laserLine.SetPosition(1, hitInfo.point);
-                laserLine.SetPosition(2, hitInfo.point + 2 * reflectVector);
+                delegateTheReflex(hitInfo.transform.FindChild("LightBeam").gameObject, hitInfo.point, hitInfo.transform);
             }
             return;
         }
 
+        // The light doesn't hit anything
+        drawLongLight();
+    }
+
+    private void delegateTheReflex(GameObject lightObj, Vector3 newStartPoint, Transform objTrans)
+    {
+        if (lightObj == null)
+            return;
+
+        Vector3 incomingVector = hitInfo.point - startPoint.position;
+        Vector3 reflectVector = Vector3.Reflect(incomingVector, hitInfo.normal);
+        Debug.DrawRay(hitInfo.point, reflectVector, Color.green);
+
+        reflexGameObj = lightObj;
+        BeamControl reflexComponent = reflexGameObj.GetComponent<BeamControl>();
+        reflexComponent.direction = reflectVector;
+        reflexComponent.startPoint = objTrans;
+        reflexComponent.offsetVector = newStartPoint - objTrans.position;
+        reflexGameObj.SetActive(true);
+    }
+
+    /// <summary>
+    /// Draw very long light
+    /// </summary>
+    private void drawLongLight()
+    {
         laserLine.SetVertexCount(2);
-        laserLine.SetPosition(0, parrentTransform.position);
-        laserLine.SetPosition(1, parrentTransform.position + 20 * direction);
+        laserLine.SetPosition(0, startPoint.position + offsetVector);
+        laserLine.SetPosition(1, startPoint.position + 20 * direction);
+
+        notifyToReflexObj();
     }
 
-    private void detectReflexion()
+    /// <summary>
+    /// Notify the reflex object when the light doesn't hit anything
+    /// </summary>
+    public void notify()
     {
-        Vector3 comingVector = endPoint.position - parrentTransform.position;
-
-        //Debug.DrawLine(parrentTransform.position, endPoint.position, Color.red);
-        Debug.DrawRay(parrentTransform.position, direction, Color.red);
-        laserLine.SetPosition(0, parrentTransform.position);
-        laserLine.SetPosition(1, endPoint.position);
-
-        //if (Physics.Raycast(parrentTransform.position, comingVector, out hit, mask))
-        if (Physics.Raycast(parrentTransform.position, comingVector, out hitInfo))
-        {
-            Vector3 incomingVector = hitInfo.point - parrentTransform.position;
-            Vector3 reflectVector = Vector3.Reflect(incomingVector, hitInfo.normal);
-            Debug.DrawRay(hitInfo.point, reflectVector, Color.green);
-            laserLine.SetVertexCount(3);
-            laserLine.SetPosition(1, hitInfo.point);
-            laserLine.SetPosition(2, hitInfo.point + 2 * reflectVector);
-        }
+        notifyToReflexObj();
+        gameObject.SetActive(false);
     }
 
-    private void detectObstacle()
+    /// <summary>
+    /// Concrete method to notify to reflex object
+    /// </summary>
+    private void notifyToReflexObj()
     {
-        Vector3 comingVector = endPoint.position - parrentTransform.position;
+        if (reflexGameObj == null)
+            return;
 
-        Debug.DrawLine(parrentTransform.position, endPoint.position, Color.red);
-
-
-        //if (Physics.Raycast(parrentTransform.position, comingVector, out hit, mask))
-        if (Physics.Raycast(parrentTransform.position, comingVector, out hitInfo))
+        if (reflexGameObj.GetComponent<BeamControl>().reflexGameObj != null)
         {
-            laserLine.SetPosition(0, parrentTransform.position);
-            laserLine.SetPosition(1, hitInfo.point);
-            //laserLine.SetPosition(2, hitInfo.point);
-            laserLine.SetVertexCount(2);
-            //Vector3 incomingVector = hitInfo.point - parrentTransform.position;
-            //Vector3 reflectVector = Vector3.Reflect(incomingVector, hitInfo.normal);
-            //Debug.DrawRay(hitInfo.point, reflectVector, Color.green);
-
-            //laserLine.SetPosition(1, hitInfo.point);
-            //laserLine.SetPosition(2, hitInfo.point + 2 * reflectVector);
+            if (gameObject.Equals(reflexGameObj.GetComponent<BeamControl>().reflexGameObj))
+            {
+                Debug.Log("Return");
+                return;
+            }
         }
+
+        reflexGameObj.GetComponent<BeamControl>().notify();
     }
 }
